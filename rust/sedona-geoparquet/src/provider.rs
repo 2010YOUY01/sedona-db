@@ -30,9 +30,9 @@ use datafusion::{
     execution::{options::ReadOptions, SessionState},
     prelude::{ParquetReadOptions, SessionConfig, SessionContext},
 };
-use datafusion_common::{exec_err, Result};
+use datafusion_common::{exec_err, plan_err, Result};
 
-use sedona_schema::extension_type::ExtensionType;
+use sedona_schema::{crs::deserialize_crs_from_obj, extension_type::ExtensionType};
 
 use crate::{
     format::GeoParquetFormat,
@@ -203,19 +203,59 @@ impl GeoParquetReadOptions<'_> {
         self.table_options.as_ref()
     }
 
-    /// Add geometry column metadata to apply during schema resolution
-    pub fn with_geometry_columns(
-        mut self,
-        geometry_columns: HashMap<String, GeoParquetColumnMetadata>,
-    ) -> Self {
+    /// Add geometry column metadata (JSON string) to apply during schema resolution
+    /// See python `read_parquet(..)` comments for details.
+    ///
+    /// Errors if invalid json configuration string is provided.
+    pub fn with_geometry_columns_json(mut self, geometry_columns_json: &str) -> Result<Self> {
+        let geometry_columns = parse_geometry_columns_json(geometry_columns_json)?;
         self.geometry_columns = Some(geometry_columns);
-        self
+        Ok(self)
     }
 
     /// Get the geometry columns metadata
     pub fn geometry_columns(&self) -> Option<&HashMap<String, GeoParquetColumnMetadata>> {
         self.geometry_columns.as_ref()
     }
+}
+
+/// Parse `geometry_columns` option from Json string to internal representation in
+/// [`GeoParquetReadOptions`]
+/// See python `read_parquet(..)` comments for details about `geometry_columns` option
+///
+/// # Errors
+/// Return planning error if Json string is invalid, or contains unsupported key/value.
+fn parse_geometry_columns_json(
+    geometry_columns_json: &str,
+) -> Result<HashMap<String, GeoParquetColumnMetadata>> {
+    let mut columns: HashMap<String, GeoParquetColumnMetadata> =
+        match serde_json::from_str(geometry_columns_json) {
+            Ok(columns) => columns,
+            Err(e) => return plan_err!("geometry_columns must be valid JSON: {e}"),
+        };
+
+    // for (column_name, column_metadata) in columns.iter_mut() {
+    //     if let Some(crs_value) = &column_metadata.crs {
+    //         let parsed_crs = match deserialize_crs_from_obj(crs_value) {
+    //             Ok(parsed_crs) => parsed_crs,
+    //             Err(e) => {
+    //                 return plan_err!("Invalid CRS for column '{column_name}': {e}");
+    //             }
+    //         };
+
+    //         if let Some(parsed_crs) = parsed_crs {
+    //             let normalized = match serde_json::from_str(&parsed_crs.to_json()) {
+    //                 Ok(normalized) => normalized,
+    //                 Err(e) => {
+    //                     return plan_err!("Invalid CRS for column '{column_name}': {e}");
+    //                 }
+    //             };
+    //             column_metadata.crs = Some(normalized);
+    //         }
+    //     }
+    // }
+
+    Ok(columns)
 }
 
 fn apply_geometry_columns(
