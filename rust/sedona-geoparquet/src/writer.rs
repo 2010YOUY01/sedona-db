@@ -59,7 +59,10 @@ use sedona_schema::{
 };
 
 use crate::{
-    metadata::{GeoParquetColumnMetadata, GeoParquetCovering, GeoParquetMetadata},
+    metadata::{
+        GeoParquetColumnEncoding, GeoParquetColumnMetadata, GeoParquetCovering,
+        GeoParquetMetadata,
+    },
     options::{GeoParquetVersion, TableGeoParquetOptions},
 };
 
@@ -122,6 +125,7 @@ pub fn create_geoparquet_writer_physical_plan(
         let f = conf.output_schema().field(i);
         let sedona_type = SedonaType::from_storage_field(f)?;
         let mut column_metadata = GeoParquetColumnMetadata::default();
+        column_metadata.encoding = Some(GeoParquetColumnEncoding::WKB);
 
         let (edge_type, crs) = match sedona_type {
             SedonaType::Wkb(edge_type, crs) | SedonaType::WkbView(edge_type, crs) => {
