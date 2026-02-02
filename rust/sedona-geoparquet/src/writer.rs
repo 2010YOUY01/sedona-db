@@ -53,16 +53,14 @@ use sedona_geometry::{
     interval::{Interval, IntervalTrait},
 };
 use sedona_schema::{
+    crs::lnglat,
     datatypes::{Edges, SedonaType},
     matchers::ArgMatcher,
     schema::SedonaSchema,
 };
 
 use crate::{
-    metadata::{
-        GeoParquetColumnEncoding, GeoParquetColumnMetadata, GeoParquetCovering,
-        GeoParquetMetadata,
-    },
+    metadata::{GeoParquetColumnMetadata, GeoParquetCovering, GeoParquetMetadata},
     options::{GeoParquetVersion, TableGeoParquetOptions},
 };
 
@@ -125,7 +123,6 @@ pub fn create_geoparquet_writer_physical_plan(
         let f = conf.output_schema().field(i);
         let sedona_type = SedonaType::from_storage_field(f)?;
         let mut column_metadata = GeoParquetColumnMetadata::default();
-        column_metadata.encoding = Some(GeoParquetColumnEncoding::WKB);
 
         let (edge_type, crs) = match sedona_type {
             SedonaType::Wkb(edge_type, crs) | SedonaType::WkbView(edge_type, crs) => {
@@ -143,13 +140,8 @@ pub fn create_geoparquet_writer_physical_plan(
         }
 
         // Assign crs
-        let omit_crs = crs
-            .as_ref()
-            .and_then(|crs| crs.to_authority_code().ok().flatten())
-            .map(|code| code == "OGC:CRS84")
-            .unwrap_or(false);
-        if omit_crs {
-            // Do nothing, OGC:CRS84 is the meaning of an omitted CRS
+        if crs == lnglat() {
+            // Do nothing, lnglat is the meaning of an omitted CRS
         } else if let Some(crs) = crs {
             column_metadata.crs = Some(crs.to_json().parse().map_err(|e| {
                 exec_datafusion_err!("Failed to parse CRS for column '{}' {e}", f.name())
