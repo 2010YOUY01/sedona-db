@@ -119,7 +119,7 @@ def test_read_parquet_geometry_columns_roundtrip(con, tmp_path):
 
     # `read_parquet()` with geo type hint produces `geometry` columns, writing it
     # again will produce GeoParquet file
-    geometry_columns = json.dumps({"geom": {"encoding": "WKB", "crs": 4326}})
+    geometry_columns = json.dumps({"geom": {"encoding": "WKB", "crs": "EPSG:4326"}})
     df = con.read_parquet(src, geometry_columns=geometry_columns)
     tab = df.to_arrow_table()
     assert tab["geom"].type.extension_name == "geoarrow.wkb"
